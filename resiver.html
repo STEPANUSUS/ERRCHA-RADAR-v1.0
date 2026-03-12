@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>ERRCHA RADAR</title>
+    <style>
+        body { background: #000; color: #00ff00; font-family: 'Courier New', monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; overflow: hidden; }
+        h1 { letter-spacing: 5px; color: #0f0; text-shadow: 0 0 15px #0f0; margin-bottom: 5px; }
+        #distance { font-size: 40px; margin: 20px; text-shadow: 0 0 10px #0f0; font-weight: bold; height: 50px; }
+        canvas { border: 2px solid #004400; background: #050505; box-shadow: 0 0 30px rgba(0,255,0,0.1); }
+        button { padding: 15px 40px; font-size: 20px; background: #0f0; color: #000; border: none; cursor: pointer; font-weight: bold; border-radius: 0; clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%); transition: 0.3s; }
+        button:hover { background: #fff; transform: scale(1.05); }
+        .info { color: #004400; margin-top: 15px; font-size: 12px; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+
+    <h1>ERRCHA RADAR v1.0</h1>
+    <div id="distance">СИСТЕМА ГОТОВА</div>
+    <button id="startBtn">ЗАПУСТИТЬ СКАНЕР</button>
+    <canvas id="visualizer" width="800" height="300"></canvas>
+    <div class="info">Monitoring Ultrasonic Frequency: 18.5 kHz</div>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const distanceEl = document.getElementById('distance');
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+
+        async function init() {
+            startBtn.style.display = 'none';
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+                });
+
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioCtx.createMediaStreamSource(stream);
+                const analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 8192; 
+                source.connect(analyser);
+
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                function draw() {
+                    analyser.getByteFrequencyData(dataArray);
+                    
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                    // Сетка
+                    ctx.strokeStyle = '#002200';
+                    ctx.lineWidth = 1;
+                    for(let i=0; i<canvas.width; i+=50) {
+                        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+                    }
+
+                    const freqStart = 17500;
+                    const freqEnd = 19500;
+                    const indexStart = Math.round(freqStart * analyser.fftSize / audioCtx.sampleRate);
+                    const indexEnd = Math.round(freqEnd * analyser.fftSize / audioCtx.sampleRate);
+                    const targetIndex = Math.round(18500 * analyser.fftSize / audioCtx.sampleRate);
+
+                    // Отрисовка волны
+                    ctx.beginPath();
+                    ctx.strokeStyle = '#0f0';
+                    ctx.lineWidth = 3;
+                    for (let i = indexStart; i < indexEnd; i++) {
+                        const x = ((i - indexStart) / (indexEnd - indexStart)) * canvas.width;
+                        const y = canvas.height - (dataArray[i] / 255) * canvas.height;
+                        if (i === indexStart) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+                    }
+                    ctx.stroke();
+
+                    // Линия цели ERRCHA
+                    const targetX = ((targetIndex - indexStart) / (indexEnd - indexStart)) * canvas.width;
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath(); ctx.moveTo(targetX, 0); ctx.lineTo(targetX, canvas.height); ctx.stroke();
+                    ctx.setLineDash([]);
+
+                    ctx.fillStyle = '#ff0000';
+                    ctx.font = "12px Courier New";
+                    ctx.fillText("ERRCHA TARGET (18.5kHz)", targetX + 10, 20);
+
+                    // Состояние
+                    let currentSignal = dataArray[targetIndex];
+                    if (currentSignal > 30) {
+                        distanceEl.innerText = "ОБЪЕКТ ОБНАРУЖЕН";
+                        distanceEl.style.color = "#f00";
+                    } else {
+                        distanceEl.innerText = "СКАНИРОВАНИЕ...";
+                        distanceEl.style.color = "#0f0";
+                    }
+
+                    requestAnimationFrame(draw);
+                }
+                draw();
+            } catch (err) { alert("ERRCHA SYSTEM ERROR: " + err); }
+        }
+        startBtn.onclick = init;
+    </script>
+</body>
+</html>

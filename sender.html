@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <h1>SENDER (iPhone)</h1>
+    <button onclick="start()">Включить ультразвук</button>
+    <p id="status">Выключено</p>
+
+    <script>
+        let audioCtx, oscillator;
+        function start() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            oscillator = audioCtx.createOscillator();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(18500, audioCtx.currentTime); // 18.5 кГц
+            oscillator.connect(audioCtx.destination);
+            oscillator.start();
+            document.getElementById('status').innerText = "Пищу на 18.5 кГц...";
+        }
+    </script>
+</body>
+</html>
